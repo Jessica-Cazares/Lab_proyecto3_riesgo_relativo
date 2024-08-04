@@ -32,76 +32,82 @@ El objetivo del análisis es armar un score crediticio a partir de un análisis 
 
 ## Procesamiento y análisis :bar_chart:
 
-1. Conectar/importar datos a herramientas
-* Se creó el proyecto2-hipotesis-lab y el conjunto de datos Dataset en BigQuery.
-* Tablas importadas: track_in_competition, track_in_spotify, track_technical_info
+__1. Conectar/importar datos a otras herramientas__
+*Se creó el proyecto3-riesgo-relativo-lab y el conjunto de datos Dataset en BigQuery.
+*Tablas importadas: user_info, loans_outstanding, loans_details y default.
 
-2. Identificar y manejar valores nulos
-* Se identifican valores nulos a través de comandos SQL COUNT, WHERE y IS NULL.
-* track_in_competition: 50 valores nulos en la columna in_shazam_charts.
-* track_in_spotify: 0 nulos.
-* track_technical_info: 95 valores nulos en la columna key.
+__2. Identificar y manejar valores nulos__
+*Se identifican valores nulos a través de comandos SQL COUNT, WHERE y IS NULL.
+*__user_info__: 7199 valores nulos en la columna last_month_salary y number_dependents.
+*Unión de la base de datos user_info y default usando LEFT JOIN: se encontró que de 7199 valores nulos, 7069 (19.64%) clientes son buenos pagadores y 130 (0.36%) son malos pagadores. Los datos nulos (7199) representan el 20% del total (36,000). 
+*Con los comandos AVG, WHERE y GROUP BY, se calculó el promedio a la variable last_month_salary para cada categoría de cliente (buen pagador/mal pagador), sin considerar datos outliers, es decir, salarios mayores a 400,000.
+*Con los comandos IFNULL, CASE, WHEN, THEN, ELSE, se IMPUTARON los valores nulos de la variable last_month_salary colocando el promedio por categoría.
+*Con los comandos WITH, RANK se calculó la moda para la variable number_dependents para cada categoría de cliente (buen pagador/mal pagador).
+*Con los comandos IFNULL, CASE, WHEN, THEN, ELSE, se IMPUTARON los valores nulos de la variable number_dependents colocando la moda por categoría.
+*__loans_outstanding__: 0 valores nulos.
+*__loans_details__: 0 valores nulos.
+*__default__: 0 valores nulos.
 
-3. Identificar y manejar valores duplicados
-* Se identifican duplicados a través de comandos SQL COUNT, GROUP BY, HAVING.
-* track_in_competition: no hay valores duplicados.
-* track_in_spotify: 4 track_name duplicadas con diferentes track_id. Para este análisis no se consideró la información de estos track_name porque no hay certeza de cuáles datos son correctos. La muestra total contiene 952 datos, se consideraron solo 944.
-* track_technical_info: no hay valores duplicados.
-  
-4. Identificar y manejar datos fuera del alcance del análisis
-* Se manejan variables que no son útiles para el análisis a través de comandos SQL SELECT EXCEPT.
-* track_tecnical_info: se excluyó la columna key por tener muchos datos nulos (95) y la columna mode por no tener información relevante para el análisis.
-  
-5. Identificar y manejar datos discrepantes en variables categóricas
-* Se identifican datos discrepantes utilizando el comandos de manejo de string, como REGEXP.
-* track_in_spotify: Se reemplazaron por espacios vacíos los caracteres especiales de los track_name y artist_s__name , se creó una nueva columna track_name_limpio y artist_s__name_limpio.
-  
-6. Identificar y manejar datos discrepantes en variables numéricas
-* Se identifican datos discrepantes utilizando comandos como MAX, MIN y AVG para las variables numéricas de interés para el estudio de cada base de datos.
-  
-7. Comprobar y cambiar tipo de dato
-* track_in_spotify: Conversión de la variable streams de STRING a INTEGER usando comando SAFECAST, AS INT64 creando una nueva variable streams_numero, se calculan los valores MAX, MIN y AVG.
-  
-8. Crear nuevas variables
-* track_in_spotify: Se creó la variable released, utilizando CONCAT.
-  
-9. Unir tablas
-* Se crearon vistas de las tablas con los datos limpios, view_competition_limpia, view_technical_info_limpia y view_spotify_limpia
-* Unión de las tablas limpias usando LEFT JOIN.
-* Se creó la variable total_part_playlist usando SUM.
-  
-10. Construir tablas auxiliares
-* Se creó tabla temporal para calcular el total de canciones por artista solista usando WITH.
-  
-11. Agrupar datos según variables categóricas
-* Se importan los datos de BigQuery a Power BI.
-* Se crearon tablas matrix con la cantidad de tracks por artista, cantidad de tracks por released_year y la cantidad de streams por año.
-  
-12. Visualizar las variables categóricas
-* Se crearon gráficas de barras para la visualización de variables categóricas en Power BI.
-  
-13. Aplicar medidas de tendencia central y de dispersión
-* Usando Matrix en Power BI se calcularon las medidas de tendencia central y dispersión para las variables bpm, streams spotify, playlist spotify, deezer, apple y total de participación playlists.
-  
-14. Visualizar distribución
-* Utilizando Python se crearon histogramas para las variables bpm, streams_numero, total_part_playlist.
-  
-15. Visualizar el comportamiento de los datos a lo largo del tiempo
-* Se crearon gráficos de línea en Power BI para evaluar el comportamiento de la cantidad de tracks y streams a lo largo del tiempo.
-  
-16. Calcular cuartiles, deciles o percentiles
-* Se crearon categorías por cuartiles para las variables de características en BigQuery utilizando WITH, NTILE, IF.
-* Se crearon las categorías alto y bajo para cada característica.
-  
-17. Calcular correlación entre variables
-* En BigQuery se calculó la correlación en entre variables para cada una de las hipótesis utilizando el comando CORR.
+__3.Identificar y manejar valores duplicados__
+*Se identifican duplicados a través de comandos SQL COUNT, GROUP BY, HAVING.
+*__user_info:__ no hay valores duplicados.
+*__loans_outstanding:__ no hay valores duplicados.
+*__loans_details:__ no hay valores duplicados.
+*__default:__ no hay valores duplicados.
 
-Este proceso es fundamental para asegurar la calidad y precisión del análisis subsiguiente.
+__4. Identificar y manejar datos fuera del alcance del análisis__
+*Se manejan variables que no son útiles para el análisis a través de comandos SQL SELECT EXCEPT.
+*Se excluye la variable sex de la tabla user_info.
+*Con el comando CORR y STDDEV, se calcula la correlación y la desviación estándar entre las variables more_90_days_overdue y number_times_delayed_payment_loan_30_59_days, y more_90_days_overdue y number_times_delayed_payment_loan_60_89_days. Se identifican las variables con alta correlación.
+*more_90_days_overdue y number_times_delayed_payment_loan_60_89_days tienen la correlación más alta con 0.9921.
+*number_times_delayed_payment_loan_60_89_days tiene la desviación estándar más baja 4.1055.
+*Para el análisis y limpieza se utiliza la variable more_90_days_overdue.
+
+__5. Identificar y manejar datos inconsistentes en variables categóricas__
+*Con los comandos DISTINCT, COUNT, CASE, WHEN, THEN, ELSE, LOWER se estandarizaron los datos de la variable loan_type.
+
+__6. Identificar y manejar datos inconsistentes en variables numéricas__
+*Con los comandos WITH, APPROX_QUANTILES, CASE, WHEN, ELSE, WHERE, se identifican los datos outliers de las tablas user_info y de loans_detail. Se utilizó la metodología de rango intercuartil.
+*Se realizaron box plots e histogramas interactivos en google colab usando python para visualizar mejor los resultados encontrados, adicional se hicieron nuevas consultas para encontrar los valores más extremos un top 30 y top 70.
+
+__7. Crear nuevas variables__
+*Con los comandos DISTINCT, SUM, CASE, WHEN, GROUP BY, se hizo una tabla agrupada por usuario, con una fila para cada cliente, mostrando el tipo de préstamo y la cantidad total.
+
+__8. Unir tablas__
+*Con el comando INNER JOIN se unieron las vistas user_default_limpia, loans_out_totales, loans_detail_limpia, creando una tabla consolidada con las variables limpias join_user_out_detail_limpia.
+
+__9. Agrupar datos según variables categóricas__
+*Se conectaron los datos a looker studio desde BigQuery.
+*Se creó un campo calculado en looker studio para crear una clasificación de datos por rango de edad, utilizando los comandos CASE, WHEN, THEN y de está manera hacer un análisis exploratorio.
+*Se creó un grupo categoría de pago para buen pagador y mal pagador de acuerdo a las flags 0 y 1.
+
+__10. Visualizar las variables categóricas__
+Se realizaron gráficos de barras para la visualización de variables y exploración de datos en looker studio.
+
+__11. Aplicar medidas de tendencia central y aplicar medidas de dispersión__
+*Se crearon tablas en looker studio con las medidas de tendencia central (mediana, promedio) para comparar los datos por rango de edad y por categoría de pago.
+*Se crearon tablas en looker studio con las medidas de dispersión (rango, desviación estándar) para comparar los datos por rango de edad y por categoría de pago.
+
+__12. Visualizar distribución__
+*Se crearon box plot para visualizar la distribución de las variables por rango de edad y categoría de pago en looker studio.
+*Se realizaron box plot e histogramas para las variables en google colab usando python.
+
+__13. Aplicar correlación entre las variables numéricas__
+*Se creó una matriz de correlación de todas las variables en google colab utilizando Python.
+*Con el comando CORR se calculó la correlación entre variables en BigQuery.
+
+__14. Calcular cuartiles, deciles o percentiles__
+*Con los comandos WITH, NTILE, COUNT, GROUP BY, MIN, MAX, JOIN, se calcularon los cuartiles de cada variable, se contabilizó el número de usuarios por cuartil, el total de malos pagadores y se calculó el rango de cada cuartil. 
+
+__15. Calcular riesgo relativo__
+*Con los comando WITH, NTILE, COUNT, MIN, MAX, CASE, WHEN, LEFT JOIN, se calculó el riesgo relativo en BigQuery para las variables, obteniendo una tabla con los cuartiles, total de usuarios, total de malos y buenos pagadores, riesgo relativo, y el rango de los cuartiles.
+
+Este proceso es fundamental para asegurar la calidad y precisión del análisis subsiguiente. Para ver más detalles, gráficos, resultados, tablas y decisiones consultar la ficha técnica y las consultas de BigQuery.
 
 ## Herramientas :hammer_and_wrench:
 
-* BigQuery
-* Power BI
+* Google BigQuery
+* Google Looker Studio
 * Google Docs
 * Google Slide
 * Jupyter Notebook
