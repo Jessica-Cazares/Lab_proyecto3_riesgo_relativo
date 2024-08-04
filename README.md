@@ -16,7 +16,7 @@ Un riesgo relativo igual a 1 sugiere que no hay diferencia en la incidencia entr
 - [Lenguajes](#lenguajes)
 - [Ficha técnica](/Ficha_técnica/README.md)
 - [Jupyter Notebook](/Jupyter_Notebook/README.md)
-- [Visualización](/Visualización/README.md)
+- [Dashboard](/Dashboard/README.md)
 - [Presentación](/Presentación/README.md)
 
 
