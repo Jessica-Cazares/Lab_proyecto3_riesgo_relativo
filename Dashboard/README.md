@@ -1,4 +1,4 @@
-# DASHBOARD :mag:
+# DASHBOARD :mag: :chart_with_upwards_trend:
 
 ## Contenido :dart:
 
