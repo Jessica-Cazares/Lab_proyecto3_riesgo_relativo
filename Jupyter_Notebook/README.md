@@ -4,13 +4,13 @@
 
 En estos archivos encontrarás:
 
-* Gráficos interactivos sobre el análisis de las variables.
+1. Gráficos interactivos sobre el análisis de las variables.
 
-* Gráfico con la matriz de correlación de las variables.
+2. Gráfico con la matriz de correlación de las variables.
 
-* Gráfico con la matriz de confusión.
+3. Gráfico con la matriz de confusión.
 
-* Gráficos de regresión logística.
+4. Gráficos de regresión logística.
 
 
 
