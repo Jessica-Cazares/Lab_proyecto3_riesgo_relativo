@@ -1,4 +1,4 @@
-## FICHA TÉNICA 
+## FICHA TÉCNICA DEL PROYECTO :spiral_notepad::chart_with_upwards_trend:
 
 ### Contenido :dart:
 
