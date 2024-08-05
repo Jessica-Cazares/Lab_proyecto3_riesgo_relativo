@@ -1,4 +1,4 @@
-## PRESENTACÓN :mag_right:
+## PRESENTACIÓN :mag_right:
 
 ### Contenido :dart:
 
