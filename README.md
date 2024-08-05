@@ -103,7 +103,9 @@ __14. Calcular cuartiles, deciles o percentiles__
 __15. Calcular riesgo relativo__
 * Con los comando WITH, NTILE, COUNT, MIN, MAX, CASE, WHEN, LEFT JOIN, se calculó el riesgo relativo en BigQuery para las variables, obteniendo una tabla con los cuartiles, total de usuarios, total de malos y buenos pagadores, riesgo relativo, y el rango de los cuartiles.
 
-Este proceso es fundamental para asegurar la calidad y precisión del análisis subsiguiente. Para ver más detalles, gráficos, resultados, tablas y decisiones consultar la ficha técnica y las consultas de BigQuery.
+Este proceso es fundamental para asegurar la calidad y precisión del análisis subsiguiente. 
+
+Para ver más detalles sobre el hito 1, hito 2 e hito 3, gráficos, resultados, tablas, decisiones, resultados y conclusiones consultar la ficha técnica y las consultas de BigQuery.
 
 ## Herramientas :hammer_and_wrench:
 
