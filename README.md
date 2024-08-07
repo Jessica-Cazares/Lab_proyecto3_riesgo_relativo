@@ -105,7 +105,7 @@ __15. Calcular riesgo relativo__
 
 Este proceso es fundamental para asegurar la calidad y precisión del análisis subsiguiente. 
 
-Para ver más detalles sobre el hito 1, hito 2 e hito 3, gráficos, resultados, tablas, decisiones, resultados y conclusiones consultar la ficha técnica y las consultas de BigQuery.
+Para ver más detalles sobre el hito 1, hito 2 e hito 3, gráficos, resultados, tablas, decisiones, y conclusiones consultar la ficha técnica y las consultas de BigQuery.
 
 ## Herramientas :hammer_and_wrench:
 
