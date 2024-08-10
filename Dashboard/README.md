@@ -10,4 +10,4 @@ En este archivo encontrarás información sobre:
 5. Tabla resumen con el calculo del riesgo relativo.
 6. Dashboard.
 
-![](/Imagenes/Dashboard-hipotesis.png)
+![](/Imagenes/Dashboard_RR.png)
