@@ -9,7 +9,7 @@ Un riesgo relativo igual a 1 sugiere que no hay diferencia en la incidencia entr
 
 # Temas :bulb:
 
-- [Introducción](#Introducción)
+- [Introducción](#Introducción-:gear)
 - [Objetivo](#Objetivo)
 - [Procesamiento y análisis](#Procesamiento-y-análisis)
 - [Herramientas](#Herramientas)
