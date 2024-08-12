@@ -26,11 +26,11 @@ La disminución de las tasas de interés en el mercado ha desencadenado un aumen
 
 El equipo de análisis de crédito del banco está enfrentando una carga de trabajo abrumadora debido al análisis manual requerido para cada solicitud de préstamo de clientes individuales. Esta metodología manual ha resultado en un proceso ineficiente y demorado, lo que ha afectado negativamente la eficacia y la rapidez con la que se procesan las solicitudes de préstamo. La situación se vuelve más crítica debido a la creciente preocupación por la tasa de incumplimiento (default), un problema que está afectando cada vez más a la industria financiera, aumentando la presión sobre los bancos para identificar y mitigar los riesgos asociados con el crédito.
 
-## Objetivo :dart:
+## Objetivo
 
 El objetivo del análisis es armar un score crediticio a partir de un análisis de datos y la evaluación del riesgo relativo que pueda clasificar a los solicitantes en diferentes categorías de riesgo basadas en su probabilidad de incumplimiento. Esta clasificación permitirá al banco tomar decisiones informadas sobre a quién otorgar el crédito, reduciendo así el riesgo de préstamos no reembolsables. 
 
-## Procesamiento y análisis :bar_chart:
+## Procesamiento y análisis
 
 __1. Conectar/importar datos a otras herramientas__
 * Se creó el proyecto3-riesgo-relativo-lab y el conjunto de datos Dataset en BigQuery.
@@ -107,7 +107,7 @@ Este proceso es fundamental para asegurar la calidad y precisión del análisis 
 
 Para ver más detalles sobre el hito 1, hito 2 e hito 3, gráficos, resultados, tablas, decisiones, y conclusiones consultar la ficha técnica y las consultas de BigQuery.
 
-## Herramientas :hammer_and_wrench:
+## Herramientas
 
 * Google BigQuery
 * Google Looker Studio
@@ -115,7 +115,7 @@ Para ver más detalles sobre el hito 1, hito 2 e hito 3, gráficos, resultados, 
 * Google Slide
 * Jupyter Notebook
 
-## Lenguajes :pencil2:
+## Lenguajes
 
 * SQL
 * Python
