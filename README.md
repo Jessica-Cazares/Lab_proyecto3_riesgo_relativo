@@ -9,11 +9,11 @@ Un riesgo relativo igual a 1 sugiere que no hay diferencia en la incidencia entr
 
 # Temas :bulb:
 
-- [Introducción](#introducción)
-- [Objetivo](#objetivo)
-- [Procesamiento y análisis](#procesamiento-y-análisis)
-- [Herramientas](#herramientas)
-- [Lenguajes](#lenguajes)
+- [Introducción](#Introducción)
+- [Objetivo](#Objetivo)
+- [Procesamiento y análisis](#Procesamiento-y-análisis)
+- [Herramientas](#Herramientas)
+- [Lenguajes](#Lenguajes)
 - [Ficha técnica](/Ficha_técnica/README.md)
 - [Jupyter Notebook](/Jupyter_Notebook/README.md)
 - [Dashboard](/Dashboard/README.md)
