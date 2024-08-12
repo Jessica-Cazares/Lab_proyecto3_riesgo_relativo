@@ -9,7 +9,7 @@ Un riesgo relativo igual a 1 sugiere que no hay diferencia en la incidencia entr
 
 # Temas :bulb:
 
-- [Introducción](#Introducción-:gear)
+- [Introducción](#Introducción)
 - [Objetivo](#Objetivo)
 - [Procesamiento y análisis](#Procesamiento-y-análisis)
 - [Herramientas](#Herramientas)
@@ -20,7 +20,7 @@ Un riesgo relativo igual a 1 sugiere que no hay diferencia en la incidencia entr
 - [Presentación](/Presentación/README.md)
 
 
-## Introducción :gear:
+## Introducción 
 
 La disminución de las tasas de interés en el mercado ha desencadenado un aumento notable en la demanda de solicitudes de crédito. Los clientes ven una oportunidad favorable para financiar compras importantes o consolidar deudas existentes, lo que ha llevado a una afluencia de solicitudes de préstamo en el banco.
 
