@@ -1,0 +1,2554 @@
+﻿Consultas BigQuery Studio: Proyecto 3 de Análisis de Datos
+
+
+Título del proyecto: Riesgo relativo
+
+
+Objetivo:
+
+
+Armar un score crediticio a partir de un análisis de datos y la evaluación del riesgo relativo que pueda clasificar a los solicitantes en diferentes categorías de riesgo basadas en su probabilidad de incumplimiento. Esta clasificación permitirá al banco tomar decisiones informadas sobre a quién otorgar el crédito, reduciendo así el riesgo de préstamos no reembolsables.
+
+
+Evaluar cuán efectivas son tus reglas y cómo se están comportando en la clasificación de clientes mediante una matriz de confusión,  lo que es esencial para la toma de decisiones en el análisis de crédito.
+
+
+Equipo:
+Individual
+
+
+Herramientas y Tecnologías:
+
+
+* Google BigQuery
+
+
+Lenguajes:
+
+
+* SQL
+
+
+Procesamiento y análisis:
+
+
+2.1 Procesar y preparar base de datos
+
+
+Conectar/importar datos a otras herramientas
+* Se creó el proyecto3-riesgo-relativo-lab y el conjunto de datos Dataset en BigQuery.
+* Tablas importadas: user_info, loans_outstanding, loans_details y default.
+
+
+Identificar y manejar valores nulos
+
+
+Classic Queries - Nulos:
+#Query para contar valores nulos en user_info
+SELECT
+ COUNT (*)
+FROM
+ `Dataset.user_info`
+WHERE
+ user_id IS NULL
+ OR age IS NULL
+ OR sex IS NULL
+ OR last_month_salary IS NULL
+ OR number_dependents IS NULL;
+
+
+#Query para buscar los valores nulos en user_info
+SELECT
+ *
+FROM
+ `Dataset.user_info`
+WHERE
+ user_id IS NULL
+ OR age IS NULL
+ OR sex IS NULL
+ OR last_month_salary IS NULL
+ OR number_dependents IS NULL;
+
+
+#Query para contar valores nulos en loans_outstanding
+SELECT
+ COUNT (*)
+FROM
+ `Dataset.loans_outstanding`
+WHERE
+ loan_id IS NULL
+ OR user_id IS NULL
+ OR loan_type IS NULL;
+
+
+#Query para contar valores nulos en loans_detail
+SELECT
+ COUNT (*)
+FROM
+ `Dataset.loans_detail`
+WHERE
+ user_id IS NULL
+ OR more_90_days_overdue IS NULL
+ OR using_lines_not_secured_personal_assets IS NULL
+ OR number_times_delayed_payment_loan_30_59_days IS NULL
+ OR number_times_delayed_payment_loan_60_89_days IS NULL
+ OR debt_ratio IS NULL;
+
+
+#Query para contar valores nulos en default
+SELECT
+ COUNT (*)
+FROM
+ `Dataset.default`
+WHERE
+ user_id IS NULL
+ OR default_flag IS NULL;
+
+
+#Query para saber el número total de usuarios
+SELECT
+ COUNT (*)
+FROM
+ `Dataset.user_info`;
+
+
+#Query de la unión de tablas user_info y default para identificar clientes que pagan
+SELECT *
+FROM
+ `Dataset.User_default`
+WHERE
+ default_flag = 0 AND
+ last_month_salary IS NULL;
+
+
+#Query de la unión de tablas user_info y default para identificar clientes que no pagan
+SELECT *
+FROM
+ `Dataset.User_default`
+WHERE
+ default_flag = 1 AND
+ last_month_salary IS NULL;
+
+
+Vista user_default
+#Query para unir tablas user_info más default
+SELECT
+ A.user_id,
+ A.sex,
+ A.age,
+ A.last_month_salary,
+ A.number_dependents,
+ B.default_flag,
+FROM
+ `Dataset.user_info` AS A
+LEFT JOIN
+ `Dataset.default` AS B
+ON
+ A.user_id = B.user_id;
+
+
+Classic Queries - Promedio_flags
+#Query para calcular los promedios por flags sin considerar outliers para los valores nulos en user_info
+SELECT
+ default_flag,
+ AVG(last_month_salary) AS avg_last_month_salary,
+ AVG(number_dependents) AS avg_number_dependents
+FROM
+ `Dataset.User_default`
+WHERE
+ last_month_salary <= 400000
+GROUP BY
+ default_flag;
+
+
+#Query para calcular la moda de number_dependents
+WITH dependents_counts AS (
+ SELECT
+   default_flag,
+   number_dependents,
+   COUNT(*) AS count_dependents
+ FROM
+   `Dataset.User_default`
+ WHERE
+   last_month_salary <= 400000
+ GROUP BY
+   default_flag,
+   number_dependents
+),
+dependents_mode AS (
+ SELECT
+   default_flag,
+   number_dependents,
+   count_dependents,
+   RANK() OVER (PARTITION BY default_flag ORDER BY count_dependents DESC) AS rank
+ FROM
+   dependents_counts
+)
+SELECT
+ default_flag,
+ number_dependents AS mode_number_dependents
+FROM
+ dependents_mode
+WHERE
+ rank = 1;
+
+
+#Query para calcular la moda de last_month_salary
+WITH salary_counts AS (
+ SELECT
+   default_flag,
+   last_month_salary,
+   COUNT(*) AS count_salary
+ FROM
+   `Dataset.User_default`
+ WHERE
+   last_month_salary <= 400000
+ GROUP BY
+   default_flag,
+   last_month_salary
+),
+salary_mode AS (
+ SELECT
+   default_flag,
+   last_month_salary,
+   count_salary,
+   RANK() OVER (PARTITION BY default_flag ORDER BY count_salary DESC) AS rank
+ FROM
+   salary_counts
+)
+SELECT
+ default_flag,
+ last_month_salary AS mode_last_month_salary
+FROM
+ salary_mode
+WHERE
+ rank = 1;
+
+
+Vista user_default_limpia
+#Query para IMPUTAR valores nulos en last_month_salary usando el promedio por clasificación de clientes buen y mal pagador y number_dependents usando la moda
+SELECT
+ user_id,
+ age,
+ IFNULL(last_month_salary,
+   CASE
+     WHEN default_flag = 1 THEN 4642.2
+     WHEN default_flag = 0 THEN 6714.8
+     ELSE last_month_salary
+ END
+   ) AS last_month_salary,
+ IFNULL(number_dependents,
+   CASE
+     WHEN default_flag = 1 THEN 0
+     WHEN default_flag = 0 THEN 0
+     ELSE number_dependents
+ END
+   ) AS number_dependents,
+ default_flag
+FROM
+ `Dataset.User_default`
+WHERE
+ last_month_salary <= 400000 OR last_month_salary IS NULL
+ORDER BY
+ user_id ASC;
+
+
+Identificar y manejar valores duplicados
+
+
+Classic Query - Duplicados
+#Query para buscar duplicados en loans_outstanding
+SELECT
+ loan_id,
+ COUNT(*) AS cantidad
+FROM
+ `Dataset.loans_outstanding`
+GROUP BY
+ loan_id
+HAVING
+ COUNT(*) >1;
+
+
+#Query para buscar duplicados en user_info
+SELECT
+ user_id,
+ COUNT(*) AS cantidad
+FROM
+ `Dataset.user_info`
+GROUP BY
+ user_id
+HAVING
+ COUNT(*) >1;
+
+
+#Query para buscar duplicados en loans_detail
+SELECT
+ user_id,
+ COUNT(*) AS cantidad
+FROM
+ `Dataset.loans_detail`
+GROUP BY
+ user_id
+HAVING
+ COUNT(*) >1;
+
+
+#Query para buscar duplicados en default
+SELECT
+ user_id,
+ COUNT(*) AS cantidad
+FROM
+ `Dataset.default`
+GROUP BY
+ user_id
+HAVING
+ COUNT(*) >1;
+
+
+Identificar y manejar datos fuera del alcance del análisis
+Classic Queries - Variables_fuera_alcance
+#Query para excluir la variable sex de user_info
+SELECT
+ * EXCEPT (sex)
+FROM
+ `Dataset.user_info`;
+
+
+ #Query para calcular la correlación en loans_detail
+SELECT
+ CORR (more_90_days_overdue,number_times_delayed_payment_loan_30_59_days) AS r_90_30_59,
+ CORR (more_90_days_overdue,number_times_delayed_payment_loan_60_89_days) AS r_90_60_89,
+ CORR (number_times_delayed_payment_loan_30_59_days,number_times_delayed_payment_loan_60_89_days) AS r_30_60
+FROM
+ `Dataset.loans_detail`;
+
+
+
+
+ #Query para calcular la desviación estándar de las variables
+SELECT
+ STDDEV(more_90_days_overdue) AS stddev_more_90,
+ STDDEV(number_times_delayed_payment_loan_30_59_days) AS stddev_30_59,
+ STDDEV(number_times_delayed_payment_loan_60_89_days) AS stddev_60_89
+FROM
+ `Dataset.loans_detail`;
+
+
+Identificar y manejar datos inconsistentes en variables categóricas
+
+
+Classic Queries - Datos_estandarizados
+#Query para identificar datos inconsistentes
+SELECT
+ DISTINCT loan_type
+FROM
+ `proyecto3-riesgo-relativo-lab.Dataset.loans_outstanding`;
+
+
+#Query para contar los valores inconsistentes
+SELECT
+ loan_type,
+ COUNT(*) as count
+FROM
+ `proyecto3-riesgo-relativo-lab.Dataset.loans_outstanding`
+GROUP BY
+ loan_type
+ORDER BY
+ count DESC;
+
+
+# Query para cambiar los datos inconsistentes
+CREATE or replace table `Dataset.loans_outstanding_standar` AS
+SELECT
+ loan_id,
+ user_id,
+ CASE
+   WHEN LOWER(loan_type) = 'real estate' THEN 'real estate'
+   WHEN LOWER(loan_type) IN ('other', 'others') THEN 'others'
+   ELSE LOWER(loan_type)
+ END AS loan_type
+FROM `Dataset.loans_outstanding`;
+NOTA: Se creó una nueva tabla loans_outstanding_standar
+
+
+Identificar y manejar datos inconsistentes en variables numéricas
+
+
+Classic Queries - Outliers
+#Query para identificar outliers en user_info variable age
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(age, 4)[OFFSET(1)] AS Q1_age,
+   APPROX_QUANTILES(age, 4)[OFFSET(3)] AS Q3_age
+ FROM
+   `Dataset.user_info`
+),
+iqr AS (
+ SELECT
+   Q1_age,
+   Q3_age,
+   (Q3_age - Q1_age) AS IQR_age
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_age,
+   Q3_age,
+   IQR_age,
+   Q1_age - 1.5 * IQR_age AS lower_bound,
+   Q3_age + 1.5 * IQR_age AS upper_bound
+ FROM
+   iqr
+)
+SELECT
+ user_info.*,
+ CASE
+   WHEN age < bounds.lower_bound THEN 'Below Lower Bound'
+   WHEN age > bounds.upper_bound THEN 'Above Upper Bound'
+   ELSE 'Within Range'
+ END AS age_outlier_status
+FROM
+ `Dataset.user_info` AS user_info,
+ bounds
+WHERE
+ age < bounds.lower_bound
+ OR age > bounds.upper_bound
+ORDER BY
+ age;
+
+
+#Query para identificar outliers en user_info variable last_month_salary
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(last_month_salary, 4)[OFFSET(1)] AS Q1_salary,
+   APPROX_QUANTILES(last_month_salary, 4)[OFFSET(3)] AS Q3_salary
+ FROM
+   `Dataset.user_info`
+),
+iqr AS (
+ SELECT
+   Q1_salary,
+   Q3_salary,
+   (Q3_salary - Q1_salary) AS IQR_salary
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_salary,
+   Q3_salary,
+   IQR_salary,
+   Q1_salary - 1.5 * IQR_salary AS lower_bound,
+   Q3_salary + 1.5 * IQR_salary AS upper_bound
+ FROM
+   iqr
+)
+SELECT
+ user_info.*,
+ CASE
+   WHEN last_month_salary < bounds.lower_bound THEN 'Below Lower Bound'
+   WHEN last_month_salary > bounds.upper_bound THEN 'Above Upper Bound'
+   ELSE 'Within Range'
+ END AS salary_outlier_status
+FROM
+ `Dataset.user_info` AS user_info,
+ bounds
+WHERE
+ last_month_salary < bounds.lower_bound
+ OR last_month_salary > bounds.upper_bound
+ORDER BY
+ last_month_salary;
+
+
+#Query para indentificar outliers en user_info variable number_dependents
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(number_dependents, 4)[OFFSET(1)] AS Q1_dependents,
+   APPROX_QUANTILES(number_dependents, 4)[OFFSET(3)] AS Q3_dependents
+ FROM
+   `Dataset.user_info`
+),
+iqr AS (
+ SELECT
+   Q1_dependents,
+   Q3_dependents,
+   (Q3_dependents - Q1_dependents) AS IQR_dependents
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_dependents,
+   Q3_dependents,
+   IQR_dependents,
+   Q1_dependents - 1.5 * IQR_dependents AS lower_bound,
+   Q3_dependents + 1.5 * IQR_dependents AS upper_bound
+ FROM
+   iqr
+)
+SELECT
+ user_info.*,
+ CASE
+   WHEN number_dependents < bounds.lower_bound THEN 'Below Lower Bound'
+   WHEN number_dependents > bounds.upper_bound THEN 'Above Upper Bound'
+   ELSE 'Within Range'
+ END AS dependents_outlier_status
+FROM
+ `Dataset.user_info` AS user_info,
+ bounds
+WHERE
+ number_dependents< bounds.lower_bound
+ OR number_dependents > bounds.upper_bound
+ORDER BY
+ number_dependents;
+
+
+#Query para identificar outliers en loans_detail variable more_90_
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(more_90_days_overdue, 4)[OFFSET(1)] AS Q1_90,
+   APPROX_QUANTILES(more_90_days_overdue, 4)[OFFSET(3)] AS Q3_90
+ FROM
+   `Dataset.loans_detail`
+),
+iqr AS (
+ SELECT
+   Q1_90,
+   Q3_90,
+   (Q3_90 - Q1_90) AS IQR_90
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_90,
+   Q3_90,
+   IQR_90,
+   Q1_90 - 1.5 * IQR_90 AS lower_bound,
+   Q3_90 + 1.5 * IQR_90 AS upper_bound
+ FROM
+   iqr
+)
+SELECT
+ loans_detail.*,
+ CASE
+   WHEN more_90_days_overdue < bounds.lower_bound THEN 'Below Lower Bound'
+   WHEN more_90_days_overdue > bounds.upper_bound THEN 'Above Upper Bound'
+   ELSE 'Within Range'
+ END AS more_90_days_overdue_outlier_status
+FROM
+ `Dataset.loans_detail` AS loans_detail,
+ bounds
+WHERE
+ more_90_days_overdue< bounds.lower_bound
+ OR more_90_days_overdue > bounds.upper_bound
+ORDER BY
+ more_90_days_overdue;
+
+
+#Query para identificar outliers en loans_detail variable using_lines
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(using_lines_not_secured_personal_assets, 4)[OFFSET(1)] AS Q1_lines,
+   APPROX_QUANTILES(using_lines_not_secured_personal_assets, 4)[OFFSET(3)] AS Q3_lines
+ FROM
+   `Dataset.loans_detail`
+),
+iqr AS (
+ SELECT
+   Q1_lines,
+   Q3_lines,
+   (Q3_lines - Q1_lines) AS IQR_lines
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_lines,
+   Q3_lines,
+   IQR_lines,
+   Q1_lines - 1.5 * IQR_lines AS lower_bound,
+   Q3_lines + 1.5 * IQR_lines AS upper_bound
+ FROM
+   iqr
+)
+SELECT
+ loans_detail.*,
+ CASE
+   WHEN using_lines_not_secured_personal_assets < bounds.lower_bound THEN 'Below Lower Bound'
+   WHEN using_lines_not_secured_personal_assets > bounds.upper_bound THEN 'Above Upper Bound'
+   ELSE 'Within Range'
+ END AS using_lines_not_secured_personal_assets_status
+FROM
+ `Dataset.loans_detail` AS loans_detail,
+ bounds
+WHERE
+ using_lines_not_secured_personal_assets< bounds.lower_bound
+ OR using_lines_not_secured_personal_assets > bounds.upper_bound
+ORDER BY
+ using_lines_not_secured_personal_assets;
+
+
+#Query para identificar outliers en loans_detail variable debt_ratio
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(debt_ratio, 4)[OFFSET(1)] AS Q1_ratio,
+   APPROX_QUANTILES(debt_ratio, 4)[OFFSET(3)] AS Q3_ratio
+ FROM
+   `Dataset.loans_detail`
+),
+iqr AS (
+ SELECT
+   Q1_ratio,
+   Q3_ratio,
+   (Q3_ratio - Q1_ratio) AS IQR_ratio
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_ratio,
+   Q3_ratio,
+   IQR_ratio,
+   Q1_ratio - 1.5 * IQR_ratio AS lower_bound,
+   Q3_ratio + 1.5 * IQR_ratio AS upper_bound
+ FROM
+   iqr
+)
+SELECT
+ loans_detail.*,
+ CASE
+   WHEN debt_ratio < bounds.lower_bound THEN 'Below Lower Bound'
+   WHEN debt_ratio > bounds.upper_bound THEN 'Above Upper Bound'
+   ELSE 'Within Range'
+ END AS debt_ratio_status
+FROM
+ `Dataset.loans_detail` AS loans_detail,
+ bounds
+WHERE
+ debt_ratio< bounds.lower_bound
+ OR debt_ratio > bounds.upper_bound
+ORDER BY
+ debt_ratio;
+
+
+
+
+#Query para identificar outliers en loans_detail variable number_times_delayed_payment_loan_30_59_days
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(number_times_delayed_payment_loan_30_59_days, 4)[OFFSET(1)] AS Q1_30_59,
+   APPROX_QUANTILES(number_times_delayed_payment_loan_30_59_days, 4)[OFFSET(3)] AS Q3_30_59
+ FROM
+   `Dataset.loans_detail`
+),
+iqr AS (
+ SELECT
+   Q1_30_59,
+   Q3_30_59,
+   (Q3_30_59 - Q1_30_59) AS IQR_30_59
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_30_59,
+   Q3_30_59,
+   IQR_30_59,
+   Q1_30_59 - 1.5 * IQR_30_59 AS lower_bound,
+   Q3_30_59 + 1.5 * IQR_30_59 AS upper_bound
+ FROM
+   iqr
+)
+SELECT
+ loans_detail.*,
+ CASE
+   WHEN number_times_delayed_payment_loan_30_59_days < bounds.lower_bound THEN 'Below Lower Bound'
+   WHEN number_times_delayed_payment_loan_30_59_days > bounds.upper_bound THEN 'Above Upper Bound'
+   ELSE 'Within Range'
+ END AS number_times_delayed_payment_loan_30_59_days_status
+FROM
+ `Dataset.loans_detail` AS loans_detail,
+ bounds
+WHERE
+ number_times_delayed_payment_loan_30_59_days < bounds.lower_bound
+ OR number_times_delayed_payment_loan_30_59_days > bounds.upper_bound
+ORDER BY
+ number_times_delayed_payment_loan_30_59_days;
+
+
+#Query para identificar outliers en loans_detail variable number_times_delayed_payment_loan_60_89_days
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(number_times_delayed_payment_loan_60_89_days, 4)[OFFSET(1)] AS Q1_60_89,
+   APPROX_QUANTILES(number_times_delayed_payment_loan_60_89_days, 4)[OFFSET(3)] AS Q3_60_89
+ FROM
+   `Dataset.loans_detail`
+),
+iqr AS (
+ SELECT
+   Q1_60_89,
+   Q3_60_89,
+   (Q3_60_89 - Q1_60_89) AS IQR_60_89
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_60_89,
+   Q3_60_89,
+   IQR_60_89,
+   Q1_60_89 - 1.5 * IQR_60_89 AS lower_bound,
+   Q3_60_89 + 1.5 * IQR_60_89 AS upper_bound
+ FROM
+   iqr
+)
+SELECT
+ loans_detail.*,
+ CASE
+   WHEN number_times_delayed_payment_loan_60_89_days < bounds.lower_bound THEN 'Below Lower Bound'
+   WHEN number_times_delayed_payment_loan_60_89_days > bounds.upper_bound THEN 'Above Upper Bound'
+   ELSE 'Within Range'
+ END AS number_times_delayed_payment_loan_60_89_days_status
+FROM
+ `Dataset.loans_detail` AS loans_detail,
+ bounds
+WHERE
+ number_times_delayed_payment_loan_60_89_days < bounds.lower_bound
+ OR number_times_delayed_payment_loan_60_89_days > bounds.upper_bound
+ORDER BY
+ number_times_delayed_payment_loan_60_89_days;
+
+
+Classic Queries - Top_30_70_outliers
+#Query para el top 30 outliers age
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(age, 4)[OFFSET(1)] AS Q1_age,
+   APPROX_QUANTILES(age, 4)[OFFSET(3)] AS Q3_age
+ FROM
+   `Dataset.user_info`
+),
+iqr AS (
+ SELECT
+   Q1_age,
+   Q3_age,
+   (Q3_age - Q1_age) AS IQR_age
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_age,
+   Q3_age,
+   IQR_age,
+   Q1_age - 1.5 * IQR_age AS lower_bound,
+   Q3_age + 1.5 * IQR_age AS upper_bound
+ FROM
+   iqr
+),
+outliers AS (
+ SELECT
+   user_info.*,
+   CASE
+     WHEN age < bounds.lower_bound THEN 'Below Lower Bound'
+     WHEN age > bounds.upper_bound THEN 'Above Upper Bound'
+     ELSE 'Within Range'
+   END AS age_outlier_status,
+   CASE
+     WHEN age < bounds.lower_bound THEN bounds.lower_bound - age
+     WHEN age > bounds.upper_bound THEN age - bounds.upper_bound
+     ELSE 0
+   END AS deviation
+ FROM
+   `Dataset.user_info` AS user_info,
+   bounds
+ WHERE
+   age < bounds.lower_bound
+   OR age > bounds.upper_bound
+)
+SELECT
+ *
+FROM
+ outliers
+ORDER BY
+ deviation DESC
+LIMIT 30;
+
+
+#Query para el top 30 outliers last_month_salary
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(last_month_salary, 4)[OFFSET(1)] AS Q1_salary,
+   APPROX_QUANTILES(last_month_salary, 4)[OFFSET(3)] AS Q3_salary
+ FROM
+   `Dataset.user_info`
+),
+iqr AS (
+ SELECT
+   Q1_salary,
+   Q3_salary,
+   (Q3_salary - Q1_salary) AS IQR_salary
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_salary,
+   Q3_salary,
+   IQR_salary,
+   Q1_salary - 1.5 * IQR_salary AS lower_bound,
+   Q3_salary + 1.5 * IQR_salary AS upper_bound
+ FROM
+   iqr
+),
+outliers AS (
+ SELECT
+   user_info.*,
+   CASE
+     WHEN last_month_salary < bounds.lower_bound THEN 'Below Lower Bound'
+     WHEN last_month_salary > bounds.upper_bound THEN 'Above Upper Bound'
+     ELSE 'Within Range'
+   END AS salary_outlier_status,
+   CASE
+     WHEN last_month_salary < bounds.lower_bound THEN bounds.lower_bound - last_month_salary
+     WHEN last_month_salary > bounds.upper_bound THEN last_month_salary - bounds.upper_bound
+     ELSE 0
+   END AS deviation
+ FROM
+   `Dataset.user_info` AS user_info,
+   bounds
+ WHERE
+   last_month_salary < bounds.lower_bound
+   OR last_month_salary > bounds.upper_bound
+)
+SELECT
+ *
+FROM
+ outliers
+ORDER BY
+ deviation DESC
+LIMIT 30;
+
+
+#Query top 30 number_dependents
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(number_dependents, 4)[OFFSET(1)] AS Q1_dependents,
+   APPROX_QUANTILES(number_dependents, 4)[OFFSET(3)] AS Q3_dependents
+ FROM
+   `Dataset.user_info`
+),
+iqr AS (
+ SELECT
+   Q1_dependents,
+   Q3_dependents,
+   (Q3_dependents - Q1_dependents) AS IQR_dependents
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_dependents,
+   Q3_dependents,
+   IQR_dependents,
+   Q1_dependents - 1.5 * IQR_dependents AS lower_bound,
+   Q3_dependents + 1.5 * IQR_dependents AS upper_bound
+ FROM
+   iqr
+),
+outliers AS (
+ SELECT
+   user_info.*,
+   CASE
+     WHEN number_dependents < bounds.lower_bound THEN 'Below Lower Bound'
+     WHEN number_dependents > bounds.upper_bound THEN 'Above Upper Bound'
+     ELSE 'Within Range'
+   END AS dependents_outlier_status,
+   CASE
+     WHEN number_dependents < bounds.lower_bound THEN bounds.lower_bound - number_dependents
+     WHEN number_dependents > bounds.upper_bound THEN number_dependents - bounds.upper_bound
+     ELSE 0
+   END AS deviation
+ FROM
+   `Dataset.user_info` AS user_info,
+   bounds
+ WHERE
+   number_dependents < bounds.lower_bound
+   OR number_dependents > bounds.upper_bound
+)
+SELECT
+ *
+FROM
+ outliers
+ORDER BY
+ deviation DESC
+LIMIT 30;
+
+
+#Query top 70 more_90
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(more_90_days_overdue, 4)[OFFSET(1)] AS Q1_90,
+   APPROX_QUANTILES(more_90_days_overdue, 4)[OFFSET(3)] AS Q3_90
+ FROM
+   `Dataset.loans_detail`
+),
+iqr AS (
+ SELECT
+   Q1_90,
+   Q3_90,
+   (Q3_90 - Q1_90) AS IQR_90
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_90,
+   Q3_90,
+   IQR_90,
+   Q1_90 - 1.5 * IQR_90 AS lower_bound,
+   Q3_90 + 1.5 * IQR_90 AS upper_bound
+ FROM
+   iqr
+),
+outliers AS (
+ SELECT
+   loans_detail.*,
+   CASE
+     WHEN more_90_days_overdue < bounds.lower_bound THEN 'Below Lower Bound'
+     WHEN more_90_days_overdue > bounds.upper_bound THEN 'Above Upper Bound'
+     ELSE 'Within Range'
+   END AS more_90_days_overdue_outlier_status,
+   CASE
+     WHEN more_90_days_overdue < bounds.lower_bound THEN bounds.lower_bound - more_90_days_overdue
+     WHEN more_90_days_overdue > bounds.upper_bound THEN more_90_days_overdue - bounds.upper_bound
+     ELSE 0
+   END AS deviation
+ FROM
+   `Dataset.loans_detail` AS loans_detail,
+   bounds
+ WHERE
+   more_90_days_overdue < bounds.lower_bound
+   OR more_90_days_overdue > bounds.upper_bound
+)
+SELECT
+ *
+FROM
+ outliers
+ORDER BY
+ deviation DESC
+LIMIT 70;
+
+
+#Query top 70 number_times_delayed_payment_loan_30_59_days
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(number_times_delayed_payment_loan_30_59_days, 4)[OFFSET(1)] AS Q1_30_59,
+   APPROX_QUANTILES(number_times_delayed_payment_loan_30_59_days, 4)[OFFSET(3)] AS Q3_30_59
+ FROM
+   `Dataset.loans_detail`
+),
+iqr AS (
+ SELECT
+   Q1_30_59,
+   Q3_30_59,
+   (Q3_30_59 - Q1_30_59) AS IQR_30_59
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_30_59,
+   Q3_30_59,
+   IQR_30_59,
+   Q1_30_59 - 1.5 * IQR_30_59 AS lower_bound,
+   Q3_30_59 + 1.5 * IQR_30_59 AS upper_bound
+ FROM
+   iqr
+),
+outliers AS (
+ SELECT
+   loans_detail.*,
+   CASE
+     WHEN number_times_delayed_payment_loan_30_59_days < bounds.lower_bound THEN 'Below Lower Bound'
+     WHEN number_times_delayed_payment_loan_30_59_days > bounds.upper_bound THEN 'Above Upper Bound'
+     ELSE 'Within Range'
+   END AS number_times_delayed_payment_loan_30_59_days_status,
+   CASE
+     WHEN number_times_delayed_payment_loan_30_59_days < bounds.lower_bound THEN bounds.lower_bound - number_times_delayed_payment_loan_30_59_days
+     WHEN number_times_delayed_payment_loan_30_59_days > bounds.upper_bound THEN number_times_delayed_payment_loan_30_59_days - bounds.upper_bound
+     ELSE 0
+   END AS deviation
+ FROM
+   `Dataset.loans_detail` AS loans_detail,
+   bounds
+ WHERE
+   number_times_delayed_payment_loan_30_59_days < bounds.lower_bound
+   OR number_times_delayed_payment_loan_30_59_days > bounds.upper_bound
+)
+SELECT
+ *
+FROM
+ outliers
+ORDER BY
+ deviation DESC
+LIMIT 70;
+
+
+#Query top 70 number_times_delayed_payment_loan_60_89_days
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(number_times_delayed_payment_loan_60_89_days, 4)[OFFSET(1)] AS Q1_60_89,
+   APPROX_QUANTILES(number_times_delayed_payment_loan_60_89_days, 4)[OFFSET(3)] AS Q3_60_89
+ FROM
+   `Dataset.loans_detail`
+),
+iqr AS (
+ SELECT
+   Q1_60_89,
+   Q3_60_89,
+   (Q3_60_89 - Q1_60_89) AS IQR_60_89
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_60_89,
+   Q3_60_89,
+   IQR_60_89,
+   Q1_60_89 - 1.5 * IQR_60_89 AS lower_bound,
+   Q3_60_89 + 1.5 * IQR_60_89 AS upper_bound
+ FROM
+   iqr
+),
+outliers AS (
+ SELECT
+   loans_detail.*,
+   CASE
+     WHEN number_times_delayed_payment_loan_60_89_days < bounds.lower_bound THEN 'Below Lower Bound'
+     WHEN number_times_delayed_payment_loan_60_89_days > bounds.upper_bound THEN 'Above Upper Bound'
+     ELSE 'Within Range'
+   END AS number_times_delayed_payment_loan_60_89_days_status,
+   CASE
+     WHEN number_times_delayed_payment_loan_60_89_days < bounds.lower_bound THEN bounds.lower_bound - number_times_delayed_payment_loan_60_89_days
+     WHEN number_times_delayed_payment_loan_60_89_days > bounds.upper_bound THEN number_times_delayed_payment_loan_60_89_days - bounds.upper_bound
+     ELSE 0
+   END AS deviation
+ FROM
+   `Dataset.loans_detail` AS loans_detail,
+   bounds
+ WHERE
+   number_times_delayed_payment_loan_60_89_days < bounds.lower_bound
+   OR number_times_delayed_payment_loan_60_89_days > bounds.upper_bound
+)
+SELECT
+ *
+FROM
+ outliers
+ORDER BY
+ deviation DESC
+LIMIT 70;
+
+
+#Query top 30 using_lines_not_secured_personal_assets
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(using_lines_not_secured_personal_assets, 4)[OFFSET(1)] AS Q1_lines,
+   APPROX_QUANTILES(using_lines_not_secured_personal_assets, 4)[OFFSET(3)] AS Q3_lines
+ FROM
+   `Dataset.loans_detail`
+),
+iqr AS (
+ SELECT
+   Q1_lines,
+   Q3_lines,
+   (Q3_lines - Q1_lines) AS IQR_lines
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_lines,
+   Q3_lines,
+   IQR_lines,
+   Q1_lines - 1.5 * IQR_lines AS lower_bound,
+   Q3_lines + 1.5 * IQR_lines AS upper_bound
+ FROM
+   iqr
+),
+outliers AS (
+ SELECT
+   loans_detail.*,
+   CASE
+     WHEN using_lines_not_secured_personal_assets < bounds.lower_bound THEN 'Below Lower Bound'
+     WHEN using_lines_not_secured_personal_assets > bounds.upper_bound THEN 'Above Upper Bound'
+     ELSE 'Within Range'
+   END AS using_lines_not_secured_personal_assets_status,
+   CASE
+     WHEN using_lines_not_secured_personal_assets < bounds.lower_bound THEN bounds.lower_bound - using_lines_not_secured_personal_assets
+     WHEN using_lines_not_secured_personal_assets > bounds.upper_bound THEN using_lines_not_secured_personal_assets - bounds.upper_bound
+     ELSE 0
+   END AS deviation
+ FROM
+   `Dataset.loans_detail` AS loans_detail,
+   bounds
+ WHERE
+   using_lines_not_secured_personal_assets < bounds.lower_bound
+   OR using_lines_not_secured_personal_assets > bounds.upper_bound
+)
+SELECT
+ *
+FROM
+ outliers
+ORDER BY
+ deviation DESC
+LIMIT 30;
+
+
+#Query top 30 debt_ratio
+WITH quartiles AS (
+ SELECT
+   APPROX_QUANTILES(debt_ratio, 4)[OFFSET(1)] AS Q1_ratio,
+   APPROX_QUANTILES(debt_ratio, 4)[OFFSET(3)] AS Q3_ratio
+ FROM
+   `Dataset.loans_detail`
+),
+iqr AS (
+ SELECT
+   Q1_ratio,
+   Q3_ratio,
+   (Q3_ratio - Q1_ratio) AS IQR_ratio
+ FROM
+   quartiles
+),
+bounds AS (
+ SELECT
+   Q1_ratio,
+   Q3_ratio,
+   IQR_ratio,
+   Q1_ratio - 1.5 * IQR_ratio AS lower_bound,
+   Q3_ratio + 1.5 * IQR_ratio AS upper_bound
+ FROM
+   iqr
+),
+outliers AS (
+ SELECT
+   loans_detail.*,
+   CASE
+     WHEN debt_ratio < bounds.lower_bound THEN 'Below Lower Bound'
+     WHEN debt_ratio > bounds.upper_bound THEN 'Above Upper Bound'
+     ELSE 'Within Range'
+   END AS debt_ratio_status,
+   CASE
+     WHEN debt_ratio < bounds.lower_bound THEN bounds.lower_bound - debt_ratio
+     WHEN debt_ratio > bounds.upper_bound THEN debt_ratio - bounds.upper_bound
+     ELSE 0
+   END AS deviation
+ FROM
+   `Dataset.loans_detail` AS loans_detail,
+   bounds
+ WHERE
+   debt_ratio < bounds.lower_bound
+   OR debt_ratio > bounds.upper_bound
+)
+SELECT
+ *
+FROM
+ outliers
+ORDER BY
+ deviation DESC
+LIMIT 30;
+
+
+Crear nuevas variables
+
+
+Classic Queries - Nuevas_variables
+#Query para verificar los tipos de loan_type
+SELECT
+ DISTINCT loan_type
+FROM
+ `Dataset.loans_outstanding_standar`;
+
+
+#Query para obtener una sola fila por user_id con el total de cada loan_type y el total de loans en columnas separadas
+SELECT
+ user_id,
+ SUM(CASE WHEN loan_type = 'real estate' THEN 1 ELSE 0 END) AS tot_real_estate_loans,
+ SUM(CASE WHEN loan_type = 'other' THEN 1 ELSE 0 END) AS tot_other_loans,
+ COUNT(loan_id) AS total_loans
+FROM
+ `Dataset.loans_outstanding_standar`
+GROUP BY
+ user_id
+ORDER BY
+ user_id ASC;
+
+
+#Query para identificar los loan_id por user_id por loan_type y con los totales the real_estate, other y total_loans sin nulos
+SELECT
+ user_id,
+ IFNULL(STRING_AGG(CASE WHEN loan_type = 'real estate' THEN CAST(loan_id AS STRING) ELSE NULL END, ', '), '') AS real_estate_loan_ids,
+ IFNULL(STRING_AGG(CASE WHEN loan_type = 'other' THEN CAST(loan_id AS STRING) ELSE NULL END, ', '), '') AS other_loan_ids,
+ IFNULL(COUNT(CASE WHEN loan_type = 'real estate' THEN 1 ELSE NULL END), 0) AS total_real_estate_loans,
+ IFNULL(COUNT(CASE WHEN loan_type = 'other' THEN 1 ELSE NULL END), 0) AS total_other_loans,
+ COUNT(loan_id) AS total_loans
+FROM
+ `Dataset.loans_outstanding_standar`
+GROUP BY
+ user_id
+ORDER BY
+ user_id;
+
+
+Vista loans_out_totales
+#Query para obtener una sola fila por user_id con el total de cada loan_type y el total de loans en columnas separadas
+SELECT
+ user_id,
+ SUM(CASE WHEN loan_type = 'real estate' THEN 1 ELSE 0 END) AS tot_real_estate_loans,
+ SUM(CASE WHEN loan_type = 'other' THEN 1 ELSE 0 END) AS tot_other_loans,
+ COUNT(loan_id) AS total_loans
+FROM
+ `Dataset.loans_outstanding_standar`
+GROUP BY
+ user_id
+ORDER BY
+ user_id ASC;
+
+
+Unir tablas
+
+
+Vista join_user_out_detail
+#Query para unir las tablas user_default_limpia, loans_out_totales y loans_detail_limpia
+SELECT
+ u.user_id,
+ u.age,
+ u.number_dependents,
+ u.last_month_salary,
+ u.default_flag,
+ lo.tot_real_estate_loans,
+ lo.tot_other_loans,
+ lo.total_loans,
+ ld.more_90_days_overdue,
+ ld.using_lines_not_secured_personal_assets,
+ ld.number_times_delayed_payment_loan_30_59_days,
+ ld.debt_ratio,
+ ld.number_times_delayed_payment_loan_60_89_days
+FROM
+ `Dataset.user_default_limpia` AS u
+INNER JOIN
+ `Dataset.loans_out_totales` AS lo
+ON
+ u.user_id = lo.user_id
+INNER JOIN
+ `Dataset.loans_detail_limpia` AS ld
+ON
+ u.user_id = ld.user_id
+WHERE age <97 --Quitamos outliers de edad 7 datos de 35565 a 35558 datos
+ORDER BY
+ u.user_id ASC;
+
+
+2.2 Análisis exploratorio
+
+
+Aplicar correlación entre las variables numéricas
+
+
+Classic Queries - Correlacion_variables
+#Query para calcular la correlación entre variables
+SELECT
+ CORR(age,last_month_salary) AS correlation_age_salary,
+ CORR(age,more_90_days_overdue) AS correlation_age_more90,
+ CORR(age,total_loans) AS correlation_age_total_loans,
+ CORR(last_month_salary,total_loans) AS correlation_salay_total_loans
+FROM
+ `Dataset.join_user_out_detail`;
+
+
+Calcular cuartiles, deciles o percentiles
+
+
+Classic Queries - Cuartiles_user_info
+#Query para calcular cuartiles variable age
+WITH age_datos AS (
+   SELECT
+       age,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+---Calcular los cuartiles dependiendo la edad.
+quartiles AS (
+   SELECT
+       age,
+       default_flag,
+       NTILE(4) OVER (ORDER BY age) AS cuartiles_age
+   FROM age_datos ---datos de donde provienen las variables
+),
+-- Calcula el número total de malos pagadores
+quartile_risk AS (
+   SELECT
+       cuartiles_age,
+       COUNT(*) AS total_usuarios,
+       SUM(default_flag) AS total_malos_pagadores,
+   FROM quartiles
+   GROUP BY cuartiles_age
+),
+---rango de edad (mínimo y máximo) para cada cuartil.
+quartile_ranges AS (
+   SELECT
+       cuartiles_age,
+       MIN(age) AS min_age,
+       MAX(age) AS max_age
+   FROM quartiles
+   GROUP BY cuartiles_age
+)
+SELECT
+   q.cuartiles_age,
+   q.total_usuarios,
+   q.total_malos_pagadores,
+   r.min_age,
+   r.max_age
+FROM quartile_risk q
+JOIN quartile_ranges r
+ON q.cuartiles_age = r.cuartiles_age
+ORDER BY cuartiles_age ASC;
+
+
+#Query para calcular cuartiles variable last_month_salary
+WITH salary_datos AS (
+   SELECT
+       last_month_salary,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+quartiles AS (
+   SELECT
+       last_month_salary,
+       default_flag,
+       NTILE(4) OVER (ORDER BY last_month_salary) AS cuartiles_last_month_salary
+   FROM salary_datos ---datos de donde provienen las variables
+),
+-- Calcula el número total de malos pagadores
+quartile_risk AS (
+   SELECT
+       cuartiles_last_month_salary ,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_malos_pagadores,
+   FROM quartiles
+   GROUP BY cuartiles_last_month_salary
+),
+---rango (mínimo y máximo) para cada cuartil.
+quartile_ranges AS (
+   SELECT
+      cuartiles_last_month_salary ,
+       MIN(last_month_salary) AS min_last_month_salary,
+       MAX(last_month_salary) AS max_last_month_salary
+   FROM quartiles
+   GROUP BY cuartiles_last_month_salary
+)
+SELECT
+   q.cuartiles_last_month_salary ,
+   q.total_count,
+   q.total_malos_pagadores,
+   r.min_last_month_salary,
+   r.max_last_month_salary
+FROM quartile_risk q
+JOIN quartile_ranges r
+ON q.cuartiles_last_month_salary = r.cuartiles_last_month_salary
+ORDER BY cuartiles_last_month_salary  ASC;
+
+
+#Query para calcular cuartiles en number_dependents
+WITH dependents_datos AS (
+   SELECT
+       number_dependents,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+---Calcular los cuartiles
+quartiles AS (
+   SELECT
+       number_dependents,
+       default_flag,
+       NTILE(4) OVER (ORDER BY number_dependents) AS cuartiles_dependents
+   FROM dependents_datos ---datos de donde provienen las variables
+),
+-- Calcula el número total de malos pagadores
+quartile_risk AS (
+   SELECT
+       cuartiles_dependents,
+       COUNT(*) AS total_usuarios,
+       SUM(default_flag) AS total_malos_pagadores,
+   FROM quartiles
+   GROUP BY cuartiles_dependents
+),
+---rango (mínimo y máximo) para cada cuartil.
+quartile_ranges AS (
+   SELECT
+      cuartiles_dependents,
+       MIN(number_dependents) AS min_number_dependents,
+       MAX(number_dependents) AS max_number_dependents
+   FROM quartiles
+   GROUP BY cuartiles_dependents
+)
+SELECT
+   q.cuartiles_dependents,
+   q.total_usuarios,
+   q.total_malos_pagadores,
+   r.min_number_dependents,
+   r.max_number_dependents
+FROM quartile_risk q
+JOIN quartile_ranges r
+ON q.cuartiles_dependents = r.cuartiles_dependents
+ORDER BY cuartiles_dependents ASC;
+
+
+Consultas
+Classic Queries - Cuartiles loans_detail
+#Query para calcular cuartiles total_loans
+WITH total_loans_datos AS (
+   SELECT
+      total_loans,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+---Calcular los cuartiles
+quartiles AS (
+   SELECT
+      total_loans,
+       default_flag,
+       NTILE(4) OVER (ORDER BY total_loans) AS cuartiles_total_loans
+   FROM total_loans_datos ---datos de donde provienen las variables
+),
+-- Calcula el número total de malos pagadores
+quartile_risk AS (
+   SELECT
+       cuartiles_total_loans,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_malos_pagadores,
+   FROM quartiles
+   GROUP BY cuartiles_total_loans
+),
+---rango (mínimo y máximo) para cada cuartil.
+quartile_ranges AS (
+   SELECT
+      cuartiles_total_loans,
+       MIN(total_loans) AS min_total_loans,
+       MAX(total_loans) AS max_total_loans
+   FROM quartiles
+   GROUP BY cuartiles_total_loans
+)
+SELECT
+   q.cuartiles_total_loans,
+   q.total_count,
+   q.total_malos_pagadores,
+   r.min_total_loans,
+   r.max_total_loans
+FROM quartile_risk q
+JOIN quartile_ranges r
+ON q.cuartiles_total_loans = r.cuartiles_total_loans
+ORDER BY cuartiles_total_loans ASC;
+
+
+
+
+#Query para calcular cuartiles more_90
+WITH more_90_datos AS (
+   SELECT
+      more_90_days_overdue,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+---Calcular los cuartiles
+quartiles AS (
+   SELECT
+      more_90_days_overdue,
+       default_flag,
+       NTILE(4) OVER (ORDER BY more_90_days_overdue) AS cuartiles_90
+   FROM more_90_datos ---datos de donde provienen las variables
+),
+-- Calcula el número total de malos pagadores
+quartile_risk AS (
+   SELECT
+       cuartiles_90,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_malos_pagadores,
+   FROM quartiles
+   GROUP BY cuartiles_90
+),
+---rango (mínimo y máximo) para cada cuartil.
+quartile_ranges AS (
+   SELECT
+      cuartiles_90,
+       MIN(more_90_days_overdue) AS min_90,
+       MAX(more_90_days_overdue) AS max_90
+   FROM quartiles
+   GROUP BY cuartiles_90
+)
+SELECT
+   q.cuartiles_90,
+   q.total_count,
+   q.total_malos_pagadores,
+   r.min_90,
+   r.max_90
+FROM quartile_risk q
+JOIN quartile_ranges r
+ON q.cuartiles_90 = r.cuartiles_90
+ORDER BY cuartiles_90 ASC;
+
+
+#Query para calcular cuartiles DEBT_RATIO
+WITH debt_ratio_datos AS (
+   SELECT
+       debt_ratio,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+---Calcular los cuartiles
+quartiles AS (
+   SELECT
+       debt_ratio,
+       default_flag,
+       NTILE(4) OVER (ORDER BY debt_ratio) AS cuartiles_debt_ratio
+   FROM debt_ratio_datos ---datos de donde provienen las variables
+),
+-- Calcula el número total de malos pagadores
+quartile_risk AS (
+   SELECT
+       cuartiles_debt_ratio,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_malos_pagadores,
+   FROM quartiles
+   GROUP BY cuartiles_debt_ratio
+),
+---rango (mínimo y máximo) para cada cuartil.
+quartile_ranges AS (
+   SELECT
+      cuartiles_debt_ratio,
+       MIN(debt_ratio) AS min_debt_ratio,
+       MAX(debt_ratio) AS max_debt_ratio
+   FROM quartiles
+   GROUP BY cuartiles_debt_ratio
+)
+SELECT
+   q.cuartiles_debt_ratio,
+   q.total_count,
+   q.total_malos_pagadores,
+   r.min_debt_ratio,
+   r.max_debt_ratio
+FROM quartile_risk q
+JOIN quartile_ranges r
+ON q.cuartiles_debt_ratio = r.cuartiles_debt_ratio
+ORDER BY cuartiles_debt_ratio ASC;
+
+
+
+
+#Query para calcular cuartiles using_lines
+WITH using_lines_datos AS (
+   SELECT
+       using_lines_not_secured_personal_assets,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+---Calcular los cuartiles
+quartiles AS (
+   SELECT
+       using_lines_not_secured_personal_assets,
+       default_flag,
+       NTILE(4) OVER (ORDER BY using_lines_not_secured_personal_assets) AS cuartiles_using_lines
+   FROM using_lines_datos ---datos de donde provienen las variables
+),
+-- Calcula el número total de malos pagadores
+quartile_risk AS (
+   SELECT
+       cuartiles_using_lines,
+       COUNT(*) AS total_usuarios,
+       SUM(default_flag) AS total_malos_pagadores,
+   FROM quartiles
+   GROUP BY cuartiles_using_lines
+),
+---rango (mínimo y máximo) para cada cuartil.
+quartile_ranges AS (
+   SELECT
+      cuartiles_using_lines,
+       MIN(using_lines_not_secured_personal_assets) AS min_using_lines,
+       MAX(using_lines_not_secured_personal_assets) AS max_using_lines
+   FROM quartiles
+   GROUP BY cuartiles_using_lines
+)
+SELECT
+   q.cuartiles_using_lines,
+   q.total_usuarios,
+   q.total_malos_pagadores,
+   r.min_using_lines,
+   r.max_using_lines
+FROM quartile_risk q
+JOIN quartile_ranges r
+ON q.cuartiles_using_lines = r.cuartiles_using_lines
+ORDER BY cuartiles_using_lines ASC;
+
+
+# Query para calcular cuartiles 30_59
+WITH base_data AS (
+   SELECT
+       number_times_delayed_payment_loan_30_59_days,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+---Calcular los cuartiles
+quartiles AS (
+   SELECT
+       number_times_delayed_payment_loan_30_59_days,
+       default_flag,
+       NTILE(4) OVER (ORDER BY number_times_delayed_payment_loan_30_59_days) AS cuartiles_30_59
+   FROM base_data ---datos de donde provienen las variables
+),
+-- Calcula el número total de malos pagadores
+quartile_risk AS (
+   SELECT
+       cuartiles_30_59,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_malos_pagadores,
+   FROM quartiles
+   GROUP BY cuartiles_30_59
+),
+---rango mínimo y máximo) para cada cuartil.
+quartile_ranges AS (
+   SELECT
+      cuartiles_30_59,
+       MIN(number_times_delayed_payment_loan_30_59_days) AS min_30_59_days,
+       MAX(number_times_delayed_payment_loan_30_59_days) AS max_30_59_days
+   FROM quartiles
+   GROUP BY cuartiles_30_59
+)
+SELECT
+   q.cuartiles_30_59,
+   q.total_count,
+   q.total_malos_pagadores,
+   r.min_30_59_days,
+   r.max_30_59_days
+FROM quartile_risk q
+JOIN quartile_ranges r
+ON q.cuartiles_30_59 = r.cuartiles_30_59
+ORDER BY cuartiles_30_59 ASC;
+
+
+
+
+2.3 Aplicar técnica de análisis
+
+
+Calcular riesgo relativo
+
+
+Classic Queries - RR_age
+#Query para calcular el riesgo relativo de age
+-- Paso 1: Crear una tabla temporal con los datos base
+WITH base_data AS (
+   SELECT
+       age,
+       Default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+
+
+-- Paso 2: Calcular los cuartiles para la variable age
+quartiles AS (
+   SELECT
+       age,
+       default_flag,
+       NTILE(4) OVER (ORDER BY age) AS age_quartile
+   FROM base_data
+),
+
+
+-- Paso 3: Calcular el número total de malos y buenos pagadores por cuartil
+quartile_risk AS (
+   SELECT
+       age_quartile,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_bad_payers,
+       COUNT(*) - SUM(default_flag) AS total_good_payers,
+   FROM quartiles
+   GROUP BY age_quartile
+),
+
+
+-- Paso 4: Obtener el rango de edad (mínimo y máximo) para cada cuartil
+quartile_ranges AS (
+   SELECT
+       age_quartile,
+       MIN(age) AS min_age,
+       MAX(age) AS max_age
+   FROM quartiles
+   GROUP BY age_quartile
+),
+
+
+-- Paso 5: Calcular el riesgo relativo usando la nueva fórmula
+risk_relative AS (
+   SELECT
+       q.age_quartile,
+       q.total_count,
+       q.total_bad_payers,
+       q.total_good_payers,
+       r.min_age,
+       r.max_age,
+       CASE
+           WHEN q.age_quartile = 1 THEN (q1.total_bad_payers/q1.total_count)/((q2.total_bad_payers+q3.total_bad_payers+q4.total_bad_payers)/(q2.total_count+q3.total_count+q4.total_count))
+           WHEN q.age_quartile = 2 THEN (q2.total_bad_payers / q2.total_count) / ((q1.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q3.total_count +q4.total_count))
+           WHEN q.age_quartile = 3 THEN (q3.total_bad_payers / q3.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q2.total_count +q4.total_count))
+           WHEN q.age_quartile = 4 THEN (q4.total_bad_payers / q4.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q3.total_bad_payers) / (q1.total_count + q2.total_count +q3.total_count))
+         
+       END AS riesgo_relativo
+   FROM quartile_risk q
+   JOIN quartile_ranges r ON q.age_quartile = r.age_quartile
+   LEFT JOIN quartile_risk q1 ON q1.age_quartile = 1
+   LEFT JOIN quartile_risk q2 ON q2.age_quartile = 2
+   LEFT JOIN quartile_risk q3 ON q3.age_quartile = 3
+   LEFT JOIN quartile_risk q4 ON q4.age_quartile = 4
+)
+
+
+-- Paso 6: Seleccionar los resultados finales
+SELECT
+   age_quartile,
+   total_count,
+   total_bad_payers,
+   total_good_payers,
+   riesgo_relativo,
+   min_age,
+   max_age
+FROM risk_relative
+ORDER BY age_quartile ASC;
+
+
+
+
+Classic Queries - RR_last_month_salary
+#Query para calcular el riesgo relativo de last_month_salary
+-- Paso 1: Crear una tabla temporal con los datos base
+WITH base_data AS (
+   SELECT
+       last_month_salary,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+
+
+-- Paso 2: Calcular los cuartiles para la variable last_month_salary
+quartiles AS (
+   SELECT
+       last_month_salary,
+       default_flag,
+       NTILE(4) OVER (ORDER BY last_month_salary) AS salary_quartile
+   FROM base_data
+),
+
+
+-- Paso 3: Calcular el número total de malos y buenos pagadores por cuartil
+quartile_risk AS (
+   SELECT
+       salary_quartile,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_bad_payers,
+       COUNT(*) - SUM(default_flag) AS total_good_payers
+   FROM quartiles
+   GROUP BY salary_quartile
+),
+
+
+-- Paso 4: Obtener el rango de salario (mínimo y máximo) para cada cuartil
+quartile_ranges AS (
+   SELECT
+       salary_quartile,
+       MIN(last_month_salary) AS min_salary,
+       MAX(last_month_salary) AS max_salary
+   FROM quartiles
+   GROUP BY salary_quartile
+),
+
+
+-- Paso 5: Calcular el riesgo relativo usando la nueva fórmula
+risk_relative AS (
+   SELECT
+       q.salary_quartile,
+       q.total_count,
+       q.total_bad_payers,
+       q.total_good_payers,
+       r.min_salary,
+       r.max_salary,
+       CASE
+           WHEN q.salary_quartile = 1 THEN (q1.total_bad_payers / q1.total_count) / ((q2.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q2.total_count + q3.total_count + q4.total_count))
+           WHEN q.salary_quartile = 2 THEN (q2.total_bad_payers / q2.total_count) / ((q1.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q3.total_count + q4.total_count))
+           WHEN q.salary_quartile = 3 THEN (q3.total_bad_payers / q3.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q2.total_count + q4.total_count))
+           WHEN q.salary_quartile = 4 THEN (q4.total_bad_payers / q4.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q3.total_bad_payers) / (q1.total_count + q2.total_count + q3.total_count))
+       END AS riesgo_relativo
+   FROM quartile_risk q
+   JOIN quartile_ranges r ON q.salary_quartile = r.salary_quartile
+   LEFT JOIN quartile_risk q1 ON q1.salary_quartile = 1
+   LEFT JOIN quartile_risk q2 ON q2.salary_quartile = 2
+   LEFT JOIN quartile_risk q3 ON q3.salary_quartile = 3
+   LEFT JOIN quartile_risk q4 ON q4.salary_quartile = 4
+)
+
+
+-- Paso 6: Seleccionar los resultados finales
+SELECT
+   salary_quartile,
+   total_count,
+   total_bad_payers,
+   total_good_payers,
+   riesgo_relativo,
+   min_salary,
+   Max_salary
+FROM risk_relative
+ORDER BY salary_quartile ASC;
+
+
+
+
+Classic Queries - RR_number_dependents
+#Query para calcular el riesgo relativo de number_dependents
+-- Paso 1: Crear una tabla temporal con los datos base
+WITH base_data AS (
+   SELECT
+       number_dependents,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+
+
+-- Paso 2: Calcular los cuartiles para la variable number_dependents
+quartiles AS (
+   SELECT
+       number_dependents,
+       default_flag,
+       NTILE(4) OVER (ORDER BY number_dependents) AS dependents_quartile
+   FROM base_data
+),
+
+
+-- Paso 3: Calcular el número total de malos y buenos pagadores por cuartil
+quartile_risk AS (
+   SELECT
+       dependents_quartile,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_bad_payers,
+       COUNT(*) - SUM(default_flag) AS total_good_payers
+   FROM quartiles
+   GROUP BY dependents_quartile
+),
+
+
+-- Paso 4: Obtener el rango de number_dependents (mínimo y máximo) para cada cuartil
+quartile_ranges AS (
+   SELECT
+       dependents_quartile,
+       MIN(number_dependents) AS min_dependents,
+       MAX(number_dependents) AS max_dependents
+   FROM quartiles
+   GROUP BY dependents_quartile
+),
+
+
+-- Paso 5: Calcular el riesgo relativo usando la nueva fórmula
+risk_relative AS (
+   SELECT
+       q.dependents_quartile,
+       q.total_count,
+       q.total_bad_payers,
+       q.total_good_payers,
+       r.min_dependents,
+       r.max_dependents,
+       CASE
+           WHEN q.dependents_quartile = 1 THEN (q1.total_bad_payers / q1.total_count) / ((q2.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q2.total_count + q3.total_count + q4.total_count))
+           WHEN q.dependents_quartile = 2 THEN (q2.total_bad_payers / q2.total_count) / ((q1.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q3.total_count + q4.total_count))
+           WHEN q.dependents_quartile = 3 THEN (q3.total_bad_payers / q3.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q2.total_count + q4.total_count))
+           WHEN q.dependents_quartile = 4 THEN (q4.total_bad_payers / q4.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q3.total_bad_payers) / (q1.total_count + q2.total_count + q3.total_count))
+       END AS riesgo_relativo
+   FROM quartile_risk q
+   JOIN quartile_ranges r ON q.dependents_quartile = r.dependents_quartile
+   LEFT JOIN quartile_risk q1 ON q1.dependents_quartile = 1
+   LEFT JOIN quartile_risk q2 ON q2.dependents_quartile = 2
+   LEFT JOIN quartile_risk q3 ON q3.dependents_quartile = 3
+   LEFT JOIN quartile_risk q4 ON q4.dependents_quartile = 4
+)
+
+
+-- Paso 6: Seleccionar los resultados finales
+SELECT
+   dependents_quartile,
+   total_count,
+   total_bad_payers,
+   total_good_payers,
+   riesgo_relativo,
+   min_dependents,
+   max_dependents
+FROM risk_relative
+ORDER BY dependents_quartile ASC;
+
+
+Classic Queries - RR_more_90
+#Query para calcular el riesgo relativo more_90_days_overdue
+-- Paso 1: Crear una tabla temporal con los datos base
+WITH base_data AS (
+   SELECT
+       more_90_days_overdue,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+
+
+-- Paso 2: Calcular los cuartiles para la variable more_90_days_overdue
+quartiles AS (
+   SELECT
+       more_90_days_overdue,
+       default_flag,
+       NTILE(4) OVER (ORDER BY more_90_days_overdue) AS overdue_quartile
+   FROM base_data
+),
+
+
+-- Paso 3: Calcular el número total de malos y buenos pagadores por cuartil
+quartile_risk AS (
+   SELECT
+       overdue_quartile,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_bad_payers,
+       COUNT(*) - SUM(default_flag) AS total_good_payers
+   FROM quartiles
+   GROUP BY overdue_quartile
+),
+
+
+-- Paso 4: Obtener el rango de more_90_days_overdue (mínimo y máximo) para cada cuartil
+quartile_ranges AS (
+   SELECT
+       overdue_quartile,
+       MIN(more_90_days_overdue) AS min_overdue,
+       MAX(more_90_days_overdue) AS max_overdue
+   FROM quartiles
+   GROUP BY overdue_quartile
+),
+
+
+-- Paso 5: Calcular el riesgo relativo usando la nueva fórmula
+risk_relative AS (
+   SELECT
+       q.overdue_quartile,
+       q.total_count,
+       q.total_bad_payers,
+       q.total_good_payers,
+       r.min_overdue,
+       r.max_overdue,
+       CASE
+           WHEN q.overdue_quartile = 1 THEN (q1.total_bad_payers / q1.total_count) / ((q2.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q2.total_count + q3.total_count + q4.total_count))
+           WHEN q.overdue_quartile = 2 THEN (q2.total_bad_payers / q2.total_count) / ((q1.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q3.total_count + q4.total_count))
+           WHEN q.overdue_quartile = 3 THEN (q3.total_bad_payers / q3.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q2.total_count + q4.total_count))
+           WHEN q.overdue_quartile = 4 THEN (q4.total_bad_payers / q4.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q3.total_bad_payers) / (q1.total_count + q2.total_count + q3.total_count))
+       END AS riesgo_relativo
+   FROM quartile_risk q
+   JOIN quartile_ranges r ON q.overdue_quartile = r.overdue_quartile
+   LEFT JOIN quartile_risk q1 ON q1.overdue_quartile = 1
+   LEFT JOIN quartile_risk q2 ON q2.overdue_quartile = 2
+   LEFT JOIN quartile_risk q3 ON q3.overdue_quartile = 3
+   LEFT JOIN quartile_risk q4 ON q4.overdue_quartile = 4
+)
+
+
+-- Paso 6: Seleccionar los resultados finales
+SELECT
+   overdue_quartile,
+   total_count,
+   total_bad_payers,
+   total_good_payers,
+   riesgo_relativo,
+   min_overdue,
+   max_overdue
+FROM risk_relative
+ORDER BY overdue_quartile ASC;
+
+
+Classic Queries - RR_total_loans
+#Query para calcular el riesgo relativo de total_loans
+-- Paso 1: Crear una tabla temporal con los datos base
+WITH base_data AS (
+   SELECT
+       total_loans,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+
+
+-- Paso 2: Calcular los cuartiles para la variable total_loans
+quartiles AS (
+   SELECT
+       total_loans,
+       default_flag,
+       NTILE(4) OVER (ORDER BY total_loans) AS loans_quartile
+   FROM base_data
+),
+
+
+-- Paso 3: Calcular el número total de malos y buenos pagadores por cuartil
+quartile_risk AS (
+   SELECT
+       loans_quartile,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_bad_payers,
+       COUNT(*) - SUM(default_flag) AS total_good_payers
+   FROM quartiles
+   GROUP BY loans_quartile
+),
+
+
+-- Paso 4: Obtener el rango de total_loans (mínimo y máximo) para cada cuartil
+quartile_ranges AS (
+   SELECT
+       loans_quartile,
+       MIN(total_loans) AS min_loans,
+       MAX(total_loans) AS max_loans
+   FROM quartiles
+   GROUP BY loans_quartile
+),
+
+
+-- Paso 5: Calcular el riesgo relativo usando la nueva fórmula
+risk_relative AS (
+   SELECT
+       q.loans_quartile,
+       q.total_count,
+       q.total_bad_payers,
+       q.total_good_payers,
+       r.min_loans,
+       r.max_loans,
+       CASE
+           WHEN q.loans_quartile = 1 THEN (q1.total_bad_payers / q1.total_count) / ((q2.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q2.total_count + q3.total_count + q4.total_count))
+           WHEN q.loans_quartile = 2 THEN (q2.total_bad_payers / q2.total_count) / ((q1.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q3.total_count + q4.total_count))
+           WHEN q.loans_quartile = 3 THEN (q3.total_bad_payers / q3.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q2.total_count + q4.total_count))
+           WHEN q.loans_quartile = 4 THEN (q4.total_bad_payers / q4.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q3.total_bad_payers) / (q1.total_count + q2.total_count + q3.total_count))
+       END AS riesgo_relativo
+   FROM quartile_risk q
+   JOIN quartile_ranges r ON q.loans_quartile = r.loans_quartile
+   LEFT JOIN quartile_risk q1 ON q1.loans_quartile = 1
+   LEFT JOIN quartile_risk q2 ON q2.loans_quartile = 2
+   LEFT JOIN quartile_risk q3 ON q3.loans_quartile = 3
+   LEFT JOIN quartile_risk q4 ON q4.loans_quartile = 4
+)
+
+
+-- Paso 6: Seleccionar los resultados finales
+SELECT
+   loans_quartile,
+   total_count,
+   total_bad_payers,
+   total_good_payers,
+   Riesgo_relativo,
+   min_loans,
+   max_loans
+FROM risk_relative
+ORDER BY loans_quartile ASC;
+
+
+Classic Queries - RR_using_lines
+#Query para calcular el riesgo relativo de Using_lines_not_secured_personal_assets
+-- Paso 1: Crear una tabla temporal con los datos base
+WITH base_data AS (
+   SELECT
+       Using_lines_not_secured_personal_assets,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+
+
+-- Paso 2: Calcular los cuartiles para la variable Using_lines_not_secured_personal_assets
+quartiles AS (
+   SELECT
+       Using_lines_not_secured_personal_assets,
+       default_flag,
+       NTILE(4) OVER (ORDER BY Using_lines_not_secured_personal_assets) AS unsecured_quartile
+   FROM base_data
+),
+
+
+-- Paso 3: Calcular el número total de malos y buenos pagadores por cuartil
+quartile_risk AS (
+   SELECT
+       unsecured_quartile,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_bad_payers,
+       COUNT(*) - SUM(default_flag) AS total_good_payers
+   FROM quartiles
+   GROUP BY unsecured_quartile
+),
+
+
+-- Paso 4: Obtener el rango de Using_lines_not_secured_personal_assets (mínimo y máximo) para cada cuartil
+quartile_ranges AS (
+   SELECT
+       unsecured_quartile,
+       MIN(Using_lines_not_secured_personal_assets) AS min_unsecured,
+       MAX(Using_lines_not_secured_personal_assets) AS max_unsecured
+   FROM quartiles
+   GROUP BY unsecured_quartile
+),
+
+
+-- Paso 5: Calcular el riesgo relativo usando la nueva fórmula
+risk_relative AS (
+   SELECT
+       q.unsecured_quartile,
+       q.total_count,
+       q.total_bad_payers,
+       q.total_good_payers,
+       r.min_unsecured,
+       r.max_unsecured,
+       CASE
+           WHEN q.unsecured_quartile = 1 THEN (q1.total_bad_payers / q1.total_count) / ((q2.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q2.total_count + q3.total_count + q4.total_count))
+           WHEN q.unsecured_quartile = 2 THEN (q2.total_bad_payers / q2.total_count) / ((q1.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q3.total_count + q4.total_count))
+           WHEN q.unsecured_quartile = 3 THEN (q3.total_bad_payers / q3.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q2.total_count + q4.total_count))
+           WHEN q.unsecured_quartile = 4 THEN (q4.total_bad_payers / q4.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q3.total_bad_payers) / (q1.total_count + q2.total_count + q3.total_count))
+       END AS riesgo_relativo
+   FROM quartile_risk q
+   JOIN quartile_ranges r ON q.unsecured_quartile = r.unsecured_quartile
+   LEFT JOIN quartile_risk q1 ON q1.unsecured_quartile = 1
+   LEFT JOIN quartile_risk q2 ON q2.unsecured_quartile = 2
+   LEFT JOIN quartile_risk q3 ON q3.unsecured_quartile = 3
+   LEFT JOIN quartile_risk q4 ON q4.unsecured_quartile = 4
+)
+
+
+-- Paso 6: Seleccionar los resultados finales
+SELECT
+   unsecured_quartile,
+   total_count,
+   total_bad_payers,
+   total_good_payers,
+   riesgo_relativo,
+   min_unsecured,
+   max_unsecured
+FROM risk_relative
+ORDER BY unsecured_quartile ASC;
+
+
+Classic Queries - RR_debt_ratio
+#Query para calcular el riesgo relativo de debt_ratio
+-- Paso 1: Crear una tabla temporal con los datos base
+WITH base_data AS (
+   SELECT
+       debt_ratio,
+       default_flag
+   FROM `Dataset.join_user_out_detail`
+),
+
+
+-- Paso 2: Calcular los cuartiles para la variable debt_ratio
+quartiles AS (
+   SELECT
+       debt_ratio,
+       default_flag,
+       NTILE(4) OVER (ORDER BY debt_ratio) AS debt_quartile
+   FROM base_data
+),
+
+
+-- Paso 3: Calcular el número total de malos y buenos pagadores por cuartil
+quartile_risk AS (
+   SELECT
+       debt_quartile,
+       COUNT(*) AS total_count,
+       SUM(default_flag) AS total_bad_payers,
+       COUNT(*) - SUM(default_flag) AS total_good_payers
+   FROM quartiles
+   GROUP BY debt_quartile
+),
+
+
+-- Paso 4: Obtener el rango de debt_ratio (mínimo y máximo) para cada cuartil
+quartile_ranges AS (
+   SELECT
+       debt_quartile,
+       MIN(debt_ratio) AS min_debt_ratio,
+       MAX(debt_ratio) AS max_debt_ratio
+   FROM quartiles
+   GROUP BY debt_quartile
+),
+
+
+-- Paso 5: Calcular el riesgo relativo usando la nueva fórmula
+risk_relative AS (
+   SELECT
+       q.debt_quartile,
+       q.total_count,
+       q.total_bad_payers,
+       q.total_good_payers,
+       r.min_debt_ratio,
+       r.max_debt_ratio,
+       CASE
+           WHEN q.debt_quartile = 1 THEN (q1.total_bad_payers / q1.total_count) / ((q2.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q2.total_count + q3.total_count + q4.total_count))
+           WHEN q.debt_quartile = 2 THEN (q2.total_bad_payers / q2.total_count) / ((q1.total_bad_payers + q3.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q3.total_count + q4.total_count))
+           WHEN q.debt_quartile = 3 THEN (q3.total_bad_payers / q3.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q4.total_bad_payers) / (q1.total_count + q2.total_count + q4.total_count))
+           WHEN q.debt_quartile = 4 THEN (q4.total_bad_payers / q4.total_count) / ((q1.total_bad_payers + q2.total_bad_payers + q3.total_bad_payers) / (q1.total_count + q2.total_count + q3.total_count))
+       END AS riesgo_relativo
+   FROM quartile_risk q
+   JOIN quartile_ranges r ON q.debt_quartile = r.debt_quartile
+   LEFT JOIN quartile_risk q1 ON q1.debt_quartile = 1
+   LEFT JOIN quartile_risk q2 ON q2.debt_quartile = 2
+   LEFT JOIN quartile_risk q3 ON q3.debt_quartile = 3
+   LEFT JOIN quartile_risk q4 ON q4.debt_quartile = 4
+)
+
+
+-- Paso 6: Seleccionar los resultados finales
+SELECT
+   debt_quartile,
+   total_count,
+   total_bad_payers,
+   total_good_payers,
+   riesgo_relativo,
+   min_debt_ratio,
+   max_debt_ratio
+FROM risk_relative
+ORDER BY debt_quartile ASC;
+
+
+
+
+Hito  2: Crear un puntaje (score) para los clientes a través del análisis del hito 1.
+
+
+3.1 Procesar y preparar la base de datos
+
+
+Crear nuevas variables
+
+
+Vista - tabla_variables_rr_dummies
+#Query para agregar valores dummies a las variables por cuartiles y riesgo relativo
+SELECT
+ 'debt_ratio' AS variable,
+ *,
+IF
+ (riesgo_relativo > 1.4, 1, 0) AS dummy
+FROM
+ `Dataset.RR_debt_ratio_vista`
+UNION ALL
+SELECT
+ 'more_90_days_overdue' AS variable,
+ *,
+IF
+ (riesgo_relativo > 1, 1, 0) AS dummy
+FROM
+ `Dataset.RR_more_90_vista`
+UNION ALL
+SELECT
+ 'ratio_credito' AS variable,
+ *,
+IF
+ (riesgo_relativo > 1, 1, 0) AS dummy
+FROM
+ `Dataset.RR_using_lines_vista`
+UNION ALL
+SELECT
+ 'total_loans' AS variable,
+ *,
+IF
+ (riesgo_relativo > 2, 1, 0) AS dummy
+FROM
+ `Dataset.RR_total_loans_vista`
+UNION ALL
+SELECT
+ 'number_dependents' AS variable,
+ *,
+IF
+ (riesgo_relativo > 1.38, 1, 0) AS dummy
+FROM
+ `Dataset.RR_number_dependents_vista`
+UNION ALL
+SELECT
+ 'age' AS variable,
+ *,
+IF
+ (riesgo_relativo > 1.3, 1, 0) AS dummy
+FROM
+ `Dataset.RR_age_vista`
+UNION ALL
+SELECT
+ 'last_month_salary' AS variable,
+ *,
+IF
+ (riesgo_relativo > 1.5, 1, 0) AS dummy
+FROM
+ `Dataset.RR_last_salary_vista`;
+
+
+Vista -score_hipotesis_cuartiles
+---Query para calcular SCORE hipotesis
+SELECT
+ *,
+IF
+ (dummy = 1, 4, 0) AS score
+FROM
+ `Dataset.tabla_variables_rr_dummies`
+WHERE
+ variable= 'debt_ratio'
+UNION ALL
+SELECT
+ *,
+IF
+ (dummy = 1, 4, 0) AS score
+FROM
+ `Dataset.tabla_variables_rr_dummies`
+WHERE
+ variable= 'more_90_days_overdue';
+
+
+Vista - score2_cuartiles
+​​#Query para crear score
+SELECT
+ 'total_loans' AS variable,
+ *,
+IF
+ (dummy = 1, 2, 0) AS score
+FROM
+ `Dataset.tabla_variables_rr_dummies`
+UNION ALL
+SELECT
+ 'number_dependents' AS variable,
+ *,
+IF
+ (dummy = 1, 1, 0) AS score
+FROM
+ `Dataset.tabla_variables_rr_dummies`
+UNION ALL
+SELECT
+ 'age' AS variable,
+ *,
+IF
+ (dummy = 1, 3, 0) AS score
+FROM
+ `Dataset.tabla_variables_rr_dummies`
+UNION ALL
+SELECT
+ 'last_month_salary' AS variable,
+ *,
+IF
+ (dummy = 1, 4, 0) AS score
+FROM
+ `Dataset.tabla_variables_rr_dummies`;
+
+
+3.2 Aplicar técnica de análisis
+
+
+Segmentación de clientes
+
+
+Vista - Tabla_score_dummy
+WITH Scores AS (
+   SELECT
+       user_id,
+       age,
+       last_month_salary,
+       number_dependents,
+       total_loans,
+       more_90_days_overdue,
+       using_lines_not_secured_personal_assets,
+       debt_ratio,
+       default_flag,
+       CASE
+           WHEN age <= 52 THEN 1
+           ELSE 0
+       END AS age_dummy,
+       CASE
+           WHEN last_month_salary <= 6600 THEN 1
+           ELSE 0
+       END AS last_month_salary_dummy,
+       CASE
+           WHEN number_dependents >= 1 THEN 1 ----Diferencia con tabla_score_h2 di valor de 1 a number dependents
+           ELSE 0
+       END AS number_dependents_dummy,
+       CASE
+           WHEN total_loans <= 5 THEN 1
+           ELSE 0
+       END AS total_loans_dummy,
+       CASE
+           WHEN more_90_days_overdue >= 1 THEN 1
+           ELSE 0
+       END AS more_90_dummy,
+       CASE
+           WHEN using_lines_not_secured_personal_assets >= 0.529492733 THEN 1
+           ELSE 0
+       END AS using_lines_dummy,
+       CASE
+           WHEN debt_ratio BETWEEN 0.369388638 AND 0.881365417 THEN 1 ---- cambie la condicion del puntaje WHEN debt_ratio BETWEEN 0.369388638 AND 0.881365417 THEN 1 ------ WHEN debt_ratio >= 0.369388638 THEN 1
+           ELSE 0
+       END AS debt_ratio_dummy,
+       -- Calcular total_score en la subconsulta
+       (
+           (CASE WHEN age <= 52 THEN 1 ELSE 0 END) +
+           (CASE WHEN last_month_salary <= 6600 THEN 1 ELSE 0 END) +
+           (CASE WHEN number_dependents >= 1 THEN 1 ELSE 0 END) +
+           (CASE WHEN total_loans <= 5 THEN 1 ELSE 0 END) +
+           (CASE WHEN more_90_days_overdue >= 1 THEN 1 ELSE 0 END) +
+           (CASE WHEN using_lines_not_secured_personal_assets >= 0.529492733 THEN 1 ELSE 0 END) +
+           (CASE WHEN debt_ratio BETWEEN 0.369388638 AND 0.881365417 THEN 1 ELSE 0 END) ----WHEN debt_ratio BETWEEN 0.369388638 AND 0.881365417 THEN 1 ----WHEN debt_ratio >= 0.369388638 THEN 1 ELSE 0
+       ) AS total_score
+   FROM `Dataset.join_user_out_detail`
+)
+-- Consulta externa para aplicar la clasificación basada en total_score
+SELECT
+   user_id,
+   age,
+   last_month_salary,
+   number_dependents,
+   total_loans,
+   more_90_days_overdue,
+   using_lines_not_secured_personal_assets,
+   debt_ratio,
+   default_flag,
+   age_dummy,
+   last_month_salary_dummy,
+   number_dependents_dummy,
+   total_loans_dummy,
+   more_90_dummy,
+   using_lines_dummy,
+   debt_ratio_dummy,
+   total_score,
+   -- Clasificación basada en total_score
+   CASE
+       WHEN total_score <= 3 THEN 'Buen pagador'
+       WHEN total_score <= 6 THEN 'Mal pagador'
+       WHEN total_score = 7 THEN 'Mal pagador'
+   END AS clasificacion
+FROM Scores;
+
+
+
+
+Vista - matriz_score_dummie
+
+
+
+
+--Matriz de confusión
+WITH confusion_matrix AS (
+ SELECT
+   COUNTIF(clasificacion = "Buen pagador" AND default_flag = 0) AS true_positive,
+   COUNTIF(clasificacion = "Buen pagador" AND default_flag = 1) AS false_positive,
+   COUNTIF(clasificacion = "Mal pagador" AND default_flag = 0) AS false_negative,
+   COUNTIF(clasificacion = "Mal pagador" AND default_flag = 1) AS true_negative
+ FROM
+   `Dataset.Tabla_score_dummy`
+)
+SELECT
+ true_positive,
+ false_positive,
+ false_negative,
+ true_negative,
+ (true_positive + true_negative) / (true_positive + false_positive + false_negative + true_negative) AS accuracy,
+ true_positive / (true_positive + false_positive) AS precision,
+ true_positive / (true_positive + false_negative) AS recall,
+ 2 * ((true_positive / (true_positive + false_positive)) * (true_positive / (true_positive + false_negative))) /
+ ((true_positive / (true_positive + false_positive)) + (true_positive / (true_positive + false_negative))) AS f1_score
+FROM
+ Confusion_matrix;
+
+
+Vista - usuarios_flag0
+
+
+#Query para usuarios flag 0
+SELECT
+ user_id,
+ age,
+ last_month_salary,
+ number_dependents,
+ default_flag
+FROM
+ `Dataset.User_default`
+WHERE
+ default_flag = 0
+ORDER BY
+user_id ASC;
+
+
+Vista - usuarios_flag1
+#Query para usuarios flag 1
+SELECT
+ user_id,
+ age,
+ last_month_salary,
+ number_dependents,
+ default_flag
+FROM
+ `Dataset.User_default`
+WHERE
+ default_flag = 1
+ORDER BY
+user_id ASC;
+
+
+Vista tabla_resumen_RR
+#Query para tabla con el rango de datos de cada variable que tiene mayor riesgo de ser mal pagadora.
+SELECT
+ 'Debt Ratio' AS variable,
+ *
+FROM
+ `Dataset.RR_debt_ratio_vista`
+WHERE
+ riesgo_relativo > 1.40
+UNION ALL
+SELECT
+ 'More than 90 days overdue' AS variable,
+ *
+FROM
+ `Dataset.RR_more_90_vista`
+WHERE
+ riesgo_relativo > 40
+UNION ALL
+SELECT
+ 'Ratio credito' AS variable,
+ *
+FROM
+ `Dataset.RR_using_lines_vista`
+WHERE
+ riesgo_relativo > 42
+UNION ALL
+SELECT
+ 'Total loans' AS variable,
+ *
+FROM
+ `Dataset.RR_total_loans_vista`
+WHERE
+ riesgo_relativo > 2
+UNION ALL
+SELECT
+ 'Number Dependents' AS variable,
+ *
+FROM
+ `Dataset.RR_number_dependents_vista`
+WHERE
+ riesgo_relativo > 1.38
+UNION ALL
+SELECT
+ 'Age' AS variable,
+ *
+FROM
+ `Dataset.RR_age_vista`
+WHERE
+ riesgo_relativo > 2
+UNION ALL
+SELECT
+ 'Last month salary' AS variable,
+ *
+FROM
+ `Dataset.RR_last_salary_vista`
+WHERE
+ riesgo_relativo > 2;
